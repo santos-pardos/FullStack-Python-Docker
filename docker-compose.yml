@@ -1,0 +1,120 @@
+version: "3.9"
+
+services:
+  # -------------------------------
+  # REVERSE PROXY (Nginx)
+  # -------------------------------
+  reverse-proxy:
+    image: nginx:stable-alpine             # Imagen ligera y estable de Nginx
+    container_name: fintech_proxy          # Nombre del contenedor
+    depends_on:                            # Dependencias: espera a que los servicios estén listos
+      api:
+        condition: service_healthy         # Espera a que la API pase el healthcheck
+      web:
+        condition: service_started         # Espera a que el frontend esté iniciado
+    ports:
+      - "${PROXY_HTTP_PORT}:80"            # Expone el puerto del proxy (por ej. 8080 → 80)
+    volumes:
+      - ./reverse-proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro  # Monta la configuración personalizada
+    networks:
+      - publinet                           # Red pública (hacia el exterior)
+      - backnet                            # Red interna (conecta con web y API)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]  # Comprueba endpoint /health de Nginx
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------
+  # BACKEND API (Flask + Gunicorn)
+  # -------------------------------
+  api:
+    build:
+      context: ./api                       # Carpeta del código de la API
+      dockerfile: Dockerfile               # Dockerfile específico para Flask
+    container_name: fintech_api
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}  # Conexión a PostgreSQL
+      - FLASK_ENV=${FLASK_ENV}             # Modo desarrollo o producción
+    depends_on:
+      db:
+        condition: service_healthy         # Espera a que la base de datos esté lista
+    ports:
+      - "${API_PORT}:8000"                 # Expone el backend si se desea probar directamente
+    networks:
+      - backnet                            # Solo accesible desde la red interna
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]  # Verifica la ruta /health del backend Flask
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------
+  # FRONTEND WEB (Nginx estático)
+  # -------------------------------
+  web:
+    build:
+      context: ./web                       # Carpeta con el frontend (HTML, JS, CSS)
+      dockerfile: Dockerfile               # Dockerfile para construir la imagen Nginx estática
+    container_name: fintech_web
+    networks:
+      - backnet                            # Red interna (solo accesible por el proxy)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]  # Comprueba que Nginx sirva la página principal
+      interval: 20s
+      timeout: 5s
+      retries: 6
+
+  # -------------------------------
+  # BASE DE DATOS (PostgreSQL)
+  # -------------------------------
+  db:
+    image: postgres:16-alpine              # Imagen ligera de PostgreSQL 16
+    container_name: fintech_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}     # Usuario de la base de datos
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data    # Volumen persistente para los datos
+      - ./db/init:/docker-entrypoint-initdb.d:ro  # Scripts SQL de inicialización
+    ports:
+      - "${POSTGRES_PORT}:5432"            # Puerto opcional para acceder desde el host
+    networks:
+      - backnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1"]  # Comprueba disponibilidad del servidor PostgreSQL
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------
+  # ADMINER (Gestor web de BD)
+  # -------------------------------
+  adminer:
+    image: adminer:latest                  # Imagen de Adminer (interfaz web de PostgreSQL)
+    container_name: fintech_adminer
+    depends_on:
+      db:
+        condition: service_healthy         # Espera a que PostgreSQL esté listo
+    environment:
+      - ADMINER_DESIGN=pepa-linha          # Tema visual para Adminer
+    ports:
+      - "${ADMINER_PORT}:8080"             # Expone Adminer en el puerto 8081 (por ejemplo)
+    networks:
+      - backnet                            # Accede a la BD por red interna
+
+# -------------------------------
+# REDES
+# -------------------------------
+networks:
+  publinet:                                # Red pública (proxy hacia host)
+    driver: bridge
+  backnet:                                 # Red interna (comunicación entre servicios)
+    driver: bridge
+
+# -------------------------------
+# VOLUMENES
+# -------------------------------
+volumes:
+  pgdata:                                  # Volumen persistente de PostgreSQL
