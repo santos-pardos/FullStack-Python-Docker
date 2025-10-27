@@ -39,7 +39,9 @@
 - `docker network ls` y `docker inspect` (resumen).
 
 ## DBeaver
+```
 docker run --network fullstack-python-docker_backnet --name cloudbeaver --rm -ti -d -p 8978:8978 -v /opt/cloudbeaver/workspace dbeaver/cloudbeaver:latest
+```
 
 ## Notas
 - La API usa `DATABASE_URL` -> `postgresql://fintech:fintechpassword@db:5432/fintechdb`.
