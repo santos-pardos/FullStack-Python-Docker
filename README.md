@@ -1,4 +1,4 @@
-# Act 2 – Despliegue multi‑contenedor con Docker Compose (FinTech Solutions)
+# Despliegue multi‑contenedor con Docker Compose (FinTech Solutions)
 
 ## Estructura
 ```
