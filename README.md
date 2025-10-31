@@ -47,7 +47,7 @@ docker run --network fullstack-python-docker_backnet --name cloudbeaver --rm -ti
 - La API usa `DATABASE_URL` -> `postgresql://fintech:fintechpassword@db:5432/fintechdb`.
 - `reverse-proxy` enruta `/` a `web` y `/api/` a `api`.
 
-- ## Tool
+## Tool
 ```
 docker run -it  --network fullstack-python-docker_backnet nicolaka/netshoot sh
 ```
